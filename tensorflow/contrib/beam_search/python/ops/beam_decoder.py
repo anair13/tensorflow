@@ -93,7 +93,6 @@ class BeamDecoder(object):
         else:
             batch_size = tf.shape(state)[0]
             dtype = state.dtype
-        print "wrap state", dtype
         return dummy._create_state(batch_size, dtype, cell_state=state)
 
     def wrap_input(self, input):
@@ -169,7 +168,7 @@ class BeamDecoderCellWrapper(tf.nn.rnn_cell.RNNCell):
                 ) = state
 
         batch_size = tf.shape(past_cand_logprobs)[0] # TODO: get as int, if possible
-        
+
         full_size = batch_size * self.beam_size
 
         cell_inputs = inputs
@@ -257,7 +256,6 @@ class BeamDecoderCellWrapper(tf.nn.rnn_cell.RNNCell):
         return 1
 
     def _create_state(self, batch_size, dtype, cell_state=None):
-        print "state", batch_size, self.max_len, dtype
         cand_logprobs = tf.ones((batch_size,), dtype=tf.float32) * -float('inf')
 
         if cell_state is None:

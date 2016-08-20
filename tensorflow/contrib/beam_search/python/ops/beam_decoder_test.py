@@ -2,8 +2,6 @@ import tensorflow as tf
 import numpy as np
 from beam_decoder import BeamDecoder
 
-sess = tf.InteractiveSession()
-
 class MarkovChainCell(tf.nn.rnn_cell.RNNCell):
     """
     This cell type is only used for testing the beam decoder.
@@ -34,49 +32,33 @@ class MarkovChainCell(tf.nn.rnn_cell.RNNCell):
     def output_size(self):
         return self._output_size
 
-table = np.array([[[0.9, 0.1, 0],
-                   [0, 0.9, 0.1],
-                   [0, 0, 1.0]]] * 3)
-cell = MarkovChainCell(table)
-initial_state = cell.zero_state(1, tf.int32)
-initial_input = initial_state[0]
+class RNNTest(tf.test.TestCase):
 
-MAX_LEN = 3
-beam_decoder = BeamDecoder(num_classes=3, stop_token=2, beam_size=10, max_len=MAX_LEN)
+    def test_markov_outputs(self):
+        table = np.array([[[0.9, 0.1, 0, 0],
+               [0, 0.9, 0.1, 0],
+               [0, 0, 1.0, 0],
+               [0, 0, 0, 1.0]]] * 4)
 
-outputs, final_state = tf.nn.seq2seq.rnn_decoder(
-                        [beam_decoder.wrap_input(initial_input)] + [None] * (MAX_LEN-1),
-                        beam_decoder.wrap_state(initial_state),
-                        beam_decoder.wrap_cell(cell),
-                        loop_function = lambda prev_symbol, i: tf.reshape(prev_symbol, [-1, 1])
-                    )
+        cell = MarkovChainCell(table)
+        initial_state = cell.zero_state(1, tf.int32)
+        initial_input = initial_state[0]
 
-# best_dense = beam_decoder.unwrap_output_dense(final_state)
-# best_sparse = beam_decoder.unwrap_output_sparse(final_state)
-# best_logprobs = beam_decoder.unwrap_output_logprobs(final_state)
+        MAX_LEN = 3
+        beam_decoder = BeamDecoder(num_classes=4, stop_token=2, beam_size=10, max_len=MAX_LEN)
 
-# print best_dense.eval()
-# print best_logprobs.eval()
+        outputs, final_state = tf.nn.seq2seq.rnn_decoder(
+            [beam_decoder.wrap_input(initial_input)] + [None] * (MAX_LEN-1),
+            beam_decoder.wrap_state(initial_state),
+            beam_decoder.wrap_cell(cell),
+            loop_function = lambda prev_symbol, i: tf.reshape(prev_symbol, [-1, 1])
+        )
 
-beams = final_state[2].eval()
-probs = final_state[3].eval()
+        with self.test_session(use_gpu=False) as sess:
+            beams, probs = sess.run([final_state[2], final_state[3]])
 
-for i in range(len(beams)):
-    print beams[i][::-1], # have to reverse the order
-    print probs[i],
-    print np.exp(probs)[i]
+            TRUTH = [0.729, 0.081, 0.081, 0.081, 0.01, 0.009, 0.009, 0.0, 0.0, 0.0] # Calculated by hand
+            self.assertAllClose(np.array(TRUTH), np.exp(probs))
 
-"""
-Correct output:
-
-[0 0 0] -0.316082 0.729
-[0 0 1] -2.51331 0.081
-[0 1 1] -2.51331 0.081
-[1 1 1] -2.51331 0.081
-[1 2 2] -4.60517 0.01
-[0 1 2] -4.71053 0.009
-[1 1 2] -4.71053 0.009
-[0 0 0] -1e+18 0.0
-[0 0 1] -1e+18 0.0
-[0 1 1] -1e+18 0.0
-"""
+if __name__ == "__main__":
+    tf.test.main()
